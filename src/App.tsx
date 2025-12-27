@@ -15,6 +15,7 @@ export default function App() {
   const [activeBranch, setActiveBranch] = useState(0);
   const [activeView, setActiveView] = useState<"branches" | "history" | "penalties" | "tasks">("branches");
   const [isAuthenticated, setIsAuthenticated] = useState(false);
+  const [userRole, setUserRole] = useState<'admin' | 'manager'>('admin');
   const [showLoginModal, setShowLoginModal] = useState(false);
   const [showSuccessNotification, setShowSuccessNotification] = useState(false);
   const [loginInput, setLoginInput] = useState("");
@@ -86,11 +87,13 @@ export default function App() {
       
       if (result.ok) {
         setIsAuthenticated(true);
+        setUserRole(result.role || 'admin'); // Role'ni saqlaymiz
         setShowLoginModal(false);
         setLoginInput("");
         setPasswordInput("");
         // localStorage ga saqlaymiz
         localStorage.setItem('isAuthenticated', 'true');
+        localStorage.setItem('userRole', result.role || 'admin');
         // Success notification ko'rsatamiz
         setShowSuccessNotification(true);
         setTimeout(() => {
@@ -106,14 +109,18 @@ export default function App() {
 
   const handleLogout = () => {
     setIsAuthenticated(false);
+    setUserRole('admin');
     localStorage.removeItem('isAuthenticated');
+    localStorage.removeItem('userRole');
   };
 
   // Sahifa yuklanganda localStorage dan tekshirish
   useEffect(() => {
     const auth = localStorage.getItem('isAuthenticated');
+    const role = localStorage.getItem('userRole');
     if (auth === 'true') {
       setIsAuthenticated(true);
+      setUserRole((role as 'admin' | 'manager') || 'admin');
     }
   }, []);
 
@@ -967,7 +974,7 @@ export default function App() {
               <h1 className="text-2xl font-semibold text-gray-900 mb-1">{currentBranch.name}</h1>
               <p className="text-sm text-gray-500">Xodimlar va oylik ma'lumotlari</p>
             </div>
-            {isAuthenticated && (
+            {isAuthenticated && userRole === 'admin' && (
               <button
                 onClick={() => {
                   // Tekshirish: xodimlar bormi?
@@ -1060,7 +1067,7 @@ export default function App() {
           <div className="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden">
             <div className="px-6 py-4 bg-gray-900 border-b border-gray-800 flex items-center justify-between">
               <h2 className="text-lg font-bold text-white">Xodimlar</h2>
-              {isAuthenticated && (
+              {isAuthenticated && userRole === 'admin' && (
                 <button
                   onClick={() => setShowAddEmployee(true)}
                   className="px-4 py-2 bg-[#F87819] text-white text-sm font-bold rounded-lg hover:bg-[#e06d15] transition-all shadow-lg"
@@ -1135,7 +1142,7 @@ export default function App() {
                           <span className="text-sm font-bold text-green-600">{formatMoney(calculateSalary(employee))}</span>
                         </td>
                         <td className="px-4 py-4 whitespace-nowrap">
-                          {isAuthenticated ? (
+                          {isAuthenticated && userRole === 'admin' ? (
                             <div className="flex items-center gap-2">
                               {employee.position === "sotuvchi" && (
                                 <button
@@ -1177,7 +1184,7 @@ export default function App() {
                               </button>
                             </div>
                           ) : (
-                            <span className="text-sm text-gray-400 italic">Ko'rish rejimi</span>
+                            <span className="text-sm text-gray-500 italic">—</span>
                           )}
                         </td>
                       </tr>
@@ -1290,19 +1297,21 @@ export default function App() {
                         <p className="text-xs text-gray-600 font-semibold">
                           {record.employees.length} xodim
                         </p>
-                        <button
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            setHistoryToDelete(record);
-                            setShowDeleteHistoryConfirm(true);
-                          }}
-                          className="w-8 h-8 bg-red-50 text-red-600 rounded-lg hover:bg-red-600 hover:text-white transition-colors flex items-center justify-center"
-                          title="O'chirish"
-                        >
-                          <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-                          </svg>
-                        </button>
+                        {isAuthenticated && userRole === 'admin' && (
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setHistoryToDelete(record);
+                              setShowDeleteHistoryConfirm(true);
+                            }}
+                            className="w-8 h-8 bg-red-50 text-red-600 rounded-lg hover:bg-red-600 hover:text-white transition-colors flex items-center justify-center"
+                            title="O'chirish"
+                          >
+                            <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                            </svg>
+                          </button>
+                        )}
                       </div>
                     </div>
                   );
@@ -1501,7 +1510,7 @@ export default function App() {
                 <h1 className="text-2xl font-semibold text-gray-900 mb-1">Kunlik Ishlar</h1>
                 <p className="text-sm text-gray-500">Har bir lavozim uchun kunlik bajarilishi kerak bo'lgan ishlar</p>
               </div>
-              {isAuthenticated && (
+              {isAuthenticated && userRole === 'admin' && (
                 <button
                   onClick={() => setShowAddTaskModal(true)}
                   className="px-6 py-2.5 bg-[#F87819] text-white text-sm font-bold rounded-lg hover:bg-[#e06d15] transition-all shadow-lg flex items-center gap-2"
@@ -1568,7 +1577,7 @@ export default function App() {
                         )}
                       </div>
 
-                      {isAuthenticated && (
+                      {isAuthenticated && userRole === 'admin' && (
                         <div className="flex items-center gap-2">
                           <button
                             onClick={() => {
