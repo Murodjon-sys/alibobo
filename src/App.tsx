@@ -527,26 +527,29 @@ export default function App() {
   const updateTasks = async (tasks: Employee['dailyTasks']) => {
     if (!selectedEmployee || !tasks) return;
     
+    const employeeId = selectedEmployee.id;
+    const updatedTasks = { ...tasks }; // Nusxa olamiz
+    
     // Modal'ni darhol yopamiz
     setShowTasksModal(false);
-    const employeeId = selectedEmployee.id;
     setSelectedEmployee(null);
+    setTaskTemplates([]);
     
     try {
-      // Lokal state'ni darhol yangilaymiz
+      // Lokal state'ni darhol yangilaymiz - MUHIM: yangi obyekt yaratamiz
       setBranches(prevBranches => 
         prevBranches.map(branch => ({
           ...branch,
           employees: branch.employees.map(emp => 
             emp.id === employeeId 
-              ? { ...emp, dailyTasks: tasks }
+              ? { ...emp, dailyTasks: { ...updatedTasks } }
               : emp
           )
         }))
       );
       
       // Background'da serverga saqlaymiz
-      await api.updateEmployeeTasks(employeeId, tasks);
+      await api.updateEmployeeTasks(employeeId, updatedTasks);
     } catch (error) {
       console.error("Vazifalarni yangilashda xato:", error);
       // Xato bo'lsa, qayta yuklaymiz
@@ -673,6 +676,7 @@ export default function App() {
   const calculateSalary = (employee: Employee) => {
     let percentage = employee.percentage;
     let calculatedSalary = 0;
+    let baseSalary = 0; // Asosiy oylik (vazifalar foizisiz)
     
     // Agar sotuvchi bo'lsa
     if (employee.position === "sotuvchi") {
@@ -685,60 +689,57 @@ export default function App() {
       const wholesaleSalary = (wholesaleSales * percentage) / 100 / 2;
       
       // Jami asosiy oylik
-      const baseSalary = retailSalary + wholesaleSalary;
-      
-      // Vazifalar tekshiruvi
-      if (employee.dailyTasks && Object.keys(employee.dailyTasks).length > 0) {
-        // Bajarilgan vazifalar sonini hisoblaymiz
-        const completedTasks = Object.values(employee.dailyTasks).filter(task => task === true).length;
-        
-        // MUHIM: Har bir xodimning o'z vazifalar sonini ishlatamiz
-        const totalTasks = Object.keys(employee.dailyTasks).length;
-        
-        // Bajarilmagan vazifalar soni
-        const incompleteTasks = totalTasks - completedTasks;
-        
-        // Har bir bajarilmagan vazifa uchun 10% kamayadi
-        const taskPercentage = 100 - (incompleteTasks * 10);
-        
-        // Vazifalar foizini qo'llash
-        calculatedSalary = (baseSalary * taskPercentage) / 100;
-      } else {
-        calculatedSalary = baseSalary;
-      }
+      baseSalary = retailSalary + wholesaleSalary;
     } else {
-      // Boshqa xodimlar uchun (barcha filiallar uchun bir xil)
-      // Chakana savdo (to'liq foiz) + Optom savdo (yarim foiz)
-      const retailSalary = ((currentBranch.retailSales || 0) * percentage) / 100;
-      const wholesaleSalary = ((currentBranch.wholesaleSales || 0) * percentage) / 100 / 2;
-      const baseSalary = retailSalary + wholesaleSalary;
+      // Boshqa xodimlar uchun
       
-      // MUHIM: Boshqa lavozimlar uchun ham vazifalar tekshiriladi!
-      if (employee.dailyTasks && Object.keys(employee.dailyTasks).length > 0) {
-        // Bajarilgan vazifalar sonini hisoblaymiz
-        const completedTasks = Object.values(employee.dailyTasks).filter(task => task === true).length;
-        
-        // Har bir xodimning o'z vazifalar sonini ishlatamiz
-        const totalTasks = Object.keys(employee.dailyTasks).length;
-        
-        // Bajarilmagan vazifalar soni
-        const incompleteTasks = totalTasks - completedTasks;
-        
-        // Har bir bajarilmagan vazifa uchun 10% kamayadi
-        const taskPercentage = 100 - (incompleteTasks * 10);
-        
-        // Vazifalar foizini qo'llash
-        calculatedSalary = (baseSalary * taskPercentage) / 100;
+      // MAXSUS: Asosiy Sklad uchun UMUMIY SAVDODAN hisoblash
+      if (currentBranch.name === "Asosiy Sklad") {
+        // Asosiy Skladda: totalSales dan hisoblash (barcha filiallarning yig'indisi)
+        baseSalary = (currentBranch.totalSales * percentage) / 100;
       } else {
-        calculatedSalary = baseSalary;
+        // Oddiy filiallar uchun: FAQAT SHU FILIALDAGI SOTUVCHILARNING SAVDOSIDAN HISOBLASH
+        // Filialdagi barcha sotuvchilarning jami savdosini hisoblaymiz
+        const filialSotuvchilar = currentBranch.employees.filter(emp => emp.position === 'sotuvchi');
+        
+        // Jami chakana savdo (barcha sotuvchilardan)
+        const totalRetailSales = filialSotuvchilar.reduce((sum, emp) => sum + (emp.dailySales || 0), 0);
+        
+        // Jami optom savdo (barcha sotuvchilardan)
+        const totalWholesaleSales = filialSotuvchilar.reduce((sum, emp) => sum + (emp.wholesaleSales || 0), 0);
+        
+        // Chakana savdo (to'liq foiz) + Optom savdo (yarim foiz)
+        const retailSalary = (totalRetailSales * percentage) / 100;
+        const wholesaleSalary = (totalWholesaleSales * percentage) / 100 / 2;
+        baseSalary = retailSalary + wholesaleSalary;
       }
+    }
+    
+    // BARCHA XODIMLAR UCHUN: Vazifalar tekshiruvi
+    if (employee.dailyTasks && Object.keys(employee.dailyTasks).length > 0) {
+      // Bajarilgan vazifalar sonini hisoblaymiz
+      const completedTasks = Object.values(employee.dailyTasks).filter(task => task === true).length;
+      
+      // Har bir xodimning o'z vazifalar sonini ishlatamiz
+      const totalTasks = Object.keys(employee.dailyTasks).length;
+      
+      // Bajarilmagan vazifalar soni
+      const incompleteTasks = totalTasks - completedTasks;
+      
+      // Har bir bajarilmagan vazifa uchun 10% kamayadi
+      const taskPercentage = 100 - (incompleteTasks * 10);
+      
+      // Vazifalar foizini qo'llash
+      calculatedSalary = (baseSalary * taskPercentage) / 100;
+    } else {
+      calculatedSalary = baseSalary;
     }
     
     // Standart oylik (bonus) qo'shish
     return calculatedSalary + (employee.fixedBonus || 0);
   };
 
-  // Jarima summasini hisoblash (real-time) - BARCHA LAVOZIMLAR UCHUN
+  // Jarima summasini hisoblash (real-time) - BARCHA XODIMLAR UCHUN
   const calculatePenalty = (employee: Employee) => {
     // Agar vazifalar yo'q bo'lsa, jarima ham yo'q
     if (!employee.dailyTasks || Object.keys(employee.dailyTasks).length === 0) {
@@ -764,17 +765,27 @@ export default function App() {
       // Jami asosiy oylik
       baseSalary = retailSalary + wholesaleSalary;
     } else {
-      // Boshqa lavozimlar uchun: filial savdosidan hisoblash
-      const retailSalary = ((currentBranch.retailSales || 0) * employee.percentage) / 100;
-      const wholesaleSalary = ((currentBranch.wholesaleSales || 0) * employee.percentage) / 100 / 2;
-      baseSalary = retailSalary + wholesaleSalary;
+      // Boshqa xodimlar uchun
+      if (currentBranch.name === "Asosiy Sklad") {
+        // Asosiy Skladda: totalSales dan hisoblash
+        baseSalary = (currentBranch.totalSales * employee.percentage) / 100;
+      } else {
+        // Oddiy filiallar uchun: sotuvchilarning savdosidan
+        const filialSotuvchilar = currentBranch.employees.filter(emp => emp.position === 'sotuvchi');
+        const totalRetailSales = filialSotuvchilar.reduce((sum, emp) => sum + (emp.dailySales || 0), 0);
+        const totalWholesaleSales = filialSotuvchilar.reduce((sum, emp) => sum + (emp.wholesaleSales || 0), 0);
+        
+        const retailSalary = (totalRetailSales * employee.percentage) / 100;
+        const wholesaleSalary = (totalWholesaleSales * employee.percentage) / 100 / 2;
+        baseSalary = retailSalary + wholesaleSalary;
+      }
     }
     
-    const actualSalary = calculateSalary(employee);
+    const actualSalary = calculateSalary(employee) - (employee.fixedBonus || 0); // Bonusni ayiramiz
     return baseSalary - actualSalary;
   };
 
-  // Filial uchun jami jarima (real-time) - BARCHA LAVOZIMLAR
+  // Filial uchun jami jarima (real-time) - BARCHA XODIMLAR
   const calculateBranchPenalty = (branch: Branch) => {
     return branch.employees
       .filter(emp => emp.dailyTasks && Object.keys(emp.dailyTasks).length > 0)
@@ -1427,7 +1438,7 @@ export default function App() {
                   </thead>
                   <tbody className={`divide-y ${isDarkMode ? 'divide-gray-700' : 'divide-gray-200'}`}>
                     {currentBranch.employees.map((employee) => (
-                      <tr key={employee.id} className={`transition-colors ${
+                      <tr key={`${employee.id}-${JSON.stringify(employee.dailyTasks)}`} className={`transition-colors ${
                         isDarkMode 
                           ? 'bg-gray-800 hover:bg-gray-700' 
                           : 'hover:bg-gray-50'
