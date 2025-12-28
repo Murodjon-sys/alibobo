@@ -339,15 +339,18 @@ app.post('/api/employees', async (req, res) => {
   try {
     const employeeData = { ...req.body };
     
-    // Agar sotuvchi bo'lsa, vazifalarni standartlashtirish
-    if (employeeData.position === 'sotuvchi') {
-      const taskTemplates = await TaskTemplate.find({ position: 'sotuvchi' }).sort({ order: 1 });
-      const standardizedTasks = {};
-      for (const template of taskTemplates) {
-        const taskId = template._id.toString();
-        standardizedTasks[taskId] = employeeData.dailyTasks?.[taskId] || false;
+    // BARCHA LAVOZIMLAR uchun vazifalarni standartlashtirish
+    if (employeeData.position) {
+      const taskTemplates = await TaskTemplate.find({ position: employeeData.position }).sort({ order: 1 });
+      
+      if (taskTemplates.length > 0) {
+        const standardizedTasks = {};
+        for (const template of taskTemplates) {
+          const taskId = template._id.toString();
+          standardizedTasks[taskId] = employeeData.dailyTasks?.[taskId] || false;
+        }
+        employeeData.dailyTasks = standardizedTasks;
       }
-      employeeData.dailyTasks = standardizedTasks;
     }
     
     const employee = new Employee(employeeData);
