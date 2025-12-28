@@ -321,15 +321,17 @@ export default function App() {
   const addEmployee = async () => {
     if (!newEmployee.name || newEmployee.percentage <= 0) return;
     try {
-      // Agar sotuvchi bo'lsa, vazifalarni task templates dan yaratamiz
+      // BARCHA LAVOZIMLAR uchun vazifalarni task templates dan yaratamiz
       let employeeData = { ...newEmployee };
       
-      if (newEmployee.position === "sotuvchi") {
-        const sotuvchiTemplates = taskTemplates.filter(t => t.position === 'sotuvchi');
+      // Xodimning lavozimiga mos task template'larni topamiz
+      const positionTemplates = taskTemplates.filter(t => t.position === newEmployee.position);
+      
+      if (positionTemplates.length > 0) {
         const dailyTasks: any = {};
         
         // Har bir template uchun false qilib qo'yamiz
-        for (const template of sotuvchiTemplates) {
+        for (const template of positionTemplates) {
           dailyTasks[template._id] = false;
         }
         
@@ -715,8 +717,24 @@ export default function App() {
       
       // MAXSUS: Asosiy Sklad uchun UMUMIY SAVDODAN hisoblash
       if (currentBranch.name === "Asosiy Sklad") {
-        // Asosiy Skladda: totalSales dan hisoblash (barcha filiallarning yig'indisi)
-        baseSalary = (currentBranch.totalSales * percentage) / 100;
+        // Asosiy Skladda: retailSales va wholesaleSales dan hisoblash
+        // Chakana savdo (to'liq foiz)
+        const retailSalary = (currentBranch.retailSales || 0) * percentage / 100;
+        
+        // Optom savdo (yarim foiz)
+        const wholesaleSalary = (currentBranch.wholesaleSales || 0) * percentage / 100 / 2;
+        
+        baseSalary = retailSalary + wholesaleSalary;
+        
+        // DEBUG
+        console.log(`🏢 ${currentBranch.name} - ${employee.name} (${employee.position}):`, {
+          retailSales: currentBranch.retailSales,
+          wholesaleSales: currentBranch.wholesaleSales,
+          percentage,
+          retailSalary,
+          wholesaleSalary,
+          baseSalary
+        });
       } else {
         // Oddiy filiallar uchun: FAQAT SHU FILIALDAGI SOTUVCHILARNING SAVDOSIDAN HISOBLASH
         // Filialdagi barcha sotuvchilarning jami savdosini hisoblaymiz
@@ -803,8 +821,10 @@ export default function App() {
     } else {
       // Boshqa xodimlar uchun
       if (currentBranch.name === "Asosiy Sklad") {
-        // Asosiy Skladda: totalSales dan hisoblash
-        baseSalary = (currentBranch.totalSales * employee.percentage) / 100;
+        // Asosiy Skladda: retailSales va wholesaleSales dan hisoblash
+        const retailSalary = (currentBranch.retailSales || 0) * employee.percentage / 100;
+        const wholesaleSalary = (currentBranch.wholesaleSales || 0) * employee.percentage / 100 / 2;
+        baseSalary = retailSalary + wholesaleSalary;
       } else {
         // Oddiy filiallar uchun: sotuvchilarning savdosidan
         const filialSotuvchilar = currentBranch.employees.filter(emp => emp.position === 'sotuvchi');
@@ -1378,12 +1398,12 @@ export default function App() {
                 <button
                   onClick={() => setShowFixTasksModal(true)}
                   className="px-6 py-2.5 bg-blue-600 text-white text-sm font-bold rounded-lg hover:bg-blue-700 transition-all shadow-lg flex items-center gap-2"
-                  title="Oylik hisoblashni tekshirish va tuzatish"
+                  title="Vazifalar mavjudligini tekshirish va qo'shish"
                 >
                   <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
                   </svg>
-                  Oylikni Tekshirish
+                  Vazifalarni Tekshirish
                 </button>
                 <button
                   onClick={() => {
@@ -3579,7 +3599,7 @@ export default function App() {
         </div>
       )}
 
-      {/* Modal - Oylikni Tekshirish va Tuzatish */}
+      {/* Modal - Vazifalarni Tekshirish */}
       {showFixTasksModal && (
         <div className="fixed inset-0 bg-black/70 backdrop-blur-sm flex items-center justify-center z-50 p-4">
           <div className="bg-gradient-to-br from-gray-900 via-gray-800 to-black rounded-3xl shadow-2xl max-w-md w-full border border-gray-700">
@@ -3596,11 +3616,11 @@ export default function App() {
               </h3>
               
               <p className="text-gray-300 text-base leading-relaxed mb-2">
-                {currentBranch.name} filialidagi xodimlarning oylik hisoblashini tekshirish va tuzatishni xohlaysizmi?
+                {currentBranch.name} filialidagi xodimlarning vazifalarini tekshirish va qo'shishni xohlaysizmi?
               </p>
               
               <p className="text-gray-400 text-sm leading-relaxed">
-                Agar vazifalar tufayli oylik noto'g'ri kamaygan bo'lsa, vazifalar o'chiriladi va oylik to'liq hisoblanadi.
+                Agar xodimga vazifalar berilmagan bo'lsa, lavozimiga mos vazifalar avtomatik qo'shiladi.
               </p>
             </div>
 
@@ -3611,24 +3631,34 @@ export default function App() {
                   setShowFixTasksModal(false);
                   try {
                     let fixedCount = 0;
-                    let issuesFound: string[] = [];
                     
                     // Har bir xodimni tekshiramiz
                     for (const employee of currentBranch.employees) {
-                      // Agar sotuvchi bo'lmasa va vazifalar bor bo'lsa
-                      if (employee.position !== 'sotuvchi' && employee.dailyTasks && Object.keys(employee.dailyTasks).length > 0) {
-                        // Vazifalarni o'chiramiz
-                        await api.updateEmployee(employee.id, {
-                          name: employee.name,
-                          position: employee.position,
-                          percentage: employee.percentage,
-                          dailyTasks: {}, // Bo'sh obyekt
-                          dailySales: employee.dailySales,
-                          wholesaleSales: employee.wholesaleSales,
-                          fixedBonus: employee.fixedBonus
-                        });
-                        fixedCount++;
-                        issuesFound.push(`${employee.name} (${employee.position}): Vazifalar o'chirildi`);
+                      // Agar vazifalar yo'q bo'lsa yoki bo'sh bo'lsa
+                      if (!employee.dailyTasks || Object.keys(employee.dailyTasks).length === 0) {
+                        // Lavozimiga mos task template'larni topamiz
+                        const positionTemplates = taskTemplates.filter(t => t.position === employee.position);
+                        
+                        if (positionTemplates.length > 0) {
+                          const dailyTasks: any = {};
+                          
+                          // Har bir template uchun false qilib qo'yamiz
+                          for (const template of positionTemplates) {
+                            dailyTasks[template._id] = false;
+                          }
+                          
+                          // Backend'ga yuboramiz
+                          await api.updateEmployee(employee.id, {
+                            name: employee.name,
+                            position: employee.position,
+                            percentage: employee.percentage,
+                            dailyTasks: dailyTasks,
+                            dailySales: employee.dailySales,
+                            wholesaleSales: employee.wholesaleSales,
+                            fixedBonus: employee.fixedBonus
+                          });
+                          fixedCount++;
+                        }
                       }
                     }
                     
@@ -3660,7 +3690,7 @@ export default function App() {
         </div>
       )}
 
-      {/* Modal - Oylik Tuzatildi (Success) */}
+      {/* Modal - Vazifalar Qo'shildi (Success) */}
       {showFixTasksSuccessModal && (
         <div className="fixed inset-0 bg-black/70 backdrop-blur-sm flex items-center justify-center z-50 p-4">
           <div className="bg-gradient-to-br from-gray-900 via-gray-800 to-black rounded-3xl shadow-2xl max-w-md w-full border border-gray-700">
@@ -3673,17 +3703,17 @@ export default function App() {
               </div>
               
               <h3 className="text-2xl font-bold text-white mb-3">
-                Tuzatildi!
+                Vazifalar Qo'shildi!
               </h3>
               
               <p className="text-gray-300 text-base leading-relaxed mb-4">
-                {fixedTasksCount} ta xodimning oylik hisoblash muammosi tuzatildi
+                {fixedTasksCount} ta xodimga kunlik vazifalar qo'shildi
               </p>
               
               <div className="bg-gradient-to-r from-green-500/10 to-emerald-500/10 border border-green-500/20 rounded-xl p-4">
                 <p className="text-green-400 text-sm font-semibold mb-1">✅ Natija:</p>
                 <p className="text-gray-400 text-xs">
-                  Vazifalar tufayli kamaygan oyliklar to'g'rilandi. Endi barcha xodimlarning oyligini to'liq hisoblanadi (100%).
+                  Endi barcha xodimlar kunlik vazifalarni bajarishi kerak. Bajarilmagan vazifalar uchun oylikdan 10% kamayadi.
                 </p>
               </div>
             </div>
