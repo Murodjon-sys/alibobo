@@ -12,6 +12,10 @@ export type Employee = {
   fixedBonus?: number; // Standart oylik (bonus)
   personalBonus?: number; // Shaxsiy bonus (individual bonus)
   teamVolumeBonus?: number; // Jamoaviy abyom bonusi (team volume bonus)
+  salesShareBonus?: number; // Jami savdodan ulush bonusi (0.5% / sotuvchilar soni)
+  monthlyPlan?: number; // Oylik plan (faqat sotuvchilar uchun, default: 500,000,000)
+  monthlyRetailSales?: number; // Oylik chakana savdo (plan uchun)
+  planBonus?: number; // Plan bajarilsa bonus (1,000,000)
 };
 
 export type Branch = {

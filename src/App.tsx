@@ -20,7 +20,7 @@ defaultPositions.forEach(pos => {
 export default function App() {
   const [branches, setBranches] = useState<Branch[]>([]);
   const [activeBranch, setActiveBranch] = useState(0);
-  const [activeView, setActiveView] = useState<"branches" | "history" | "penalties" | "tasks" | "reports">("branches");
+  const [activeView, setActiveView] = useState<"branches" | "history" | "penalties" | "tasks" | "reports" | "plans">("branches");
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [isDarkMode, setIsDarkMode] = useState(false);
   const [userRole, setUserRole] = useState<'admin' | 'manager' | 'gijduvon_manager' | 'navoi_manager'>('admin');
@@ -39,6 +39,7 @@ export default function App() {
   const [bonusInput, setBonusInput] = useState("");
   const [personalBonusInput, setPersonalBonusInput] = useState(""); // Shaxsiy bonus
   const [teamVolumeBonusInput, setTeamVolumeBonusInput] = useState(""); // Jamoaviy abyom bonusi
+  const [salesShareBonusInput, setSalesShareBonusInput] = useState(""); // Jami savdodan ulush bonusi
   const [showAddTaskModal, setShowAddTaskModal] = useState(false);
   const [showEditTaskModal, setShowEditTaskModal] = useState(false);
   const [showDeleteTaskConfirm, setShowDeleteTaskConfirm] = useState(false);
@@ -437,6 +438,25 @@ export default function App() {
       setTeamVolumeBonusInput("");
     }
     
+    // Jami savdodan ulush bonusini hisoblash (FAQAT CHAKANA SAVDO)
+    if (currentBranch) {
+      const retailSalesOnly = currentBranch.retailSales || 0; // Faqat chakana savdo
+      const salesSharePercentage = 0.5; // 0.5%
+      const totalShareBonus = (retailSalesOnly * salesSharePercentage) / 100;
+      
+      // Sotuvchilar sonini hisoblash
+      const sellersCount = currentBranch.employees.filter(emp => emp.position === 'sotuvchi').length;
+      
+      if (sellersCount > 0) {
+        const sharePerSeller = totalShareBonus / sellersCount;
+        setSalesShareBonusInput(formatNumber(Math.round(sharePerSeller)));
+      } else {
+        setSalesShareBonusInput("");
+      }
+    } else {
+      setSalesShareBonusInput("");
+    }
+    
     setShowSalesModal(true);
   };
 
@@ -501,11 +521,13 @@ export default function App() {
     const bonusValue = bonusInput;
     const personalBonusValue = personalBonusInput;
     const teamVolumeBonusValue = teamVolumeBonusInput;
+    const salesShareBonusValue = salesShareBonusInput;
     setDailySalesInput("");
     setWholesaleSalesInput("");
     setBonusInput("");
     setPersonalBonusInput("");
     setTeamVolumeBonusInput("");
+    setSalesShareBonusInput("");
     
     try {
       const retailSales = parseFloat(retailValue.replace(/,/g, "")) || 0;
@@ -513,13 +535,20 @@ export default function App() {
       const fixedBonus = parseFloat(bonusValue.replace(/,/g, "")) || 0;
       const personalBonus = parseFloat(personalBonusValue.replace(/,/g, "")) || 0;
       const teamVolumeBonus = parseFloat(teamVolumeBonusValue.replace(/,/g, "")) || 0;
+      const salesShareBonus = parseFloat(salesShareBonusValue.replace(/,/g, "")) || 0;
+      
+      // Oylik chakana savdoni yangilaymiz (faqat sotuvchilar uchun)
+      const currentMonthlyRetailSales = selectedEmployee.monthlyRetailSales || 0;
+      const newMonthlyRetailSales = currentMonthlyRetailSales + retailSales;
       
       console.log('💰 Saving bonuses:', {
         fixedBonus,
         personalBonus,
         teamVolumeBonus,
+        salesShareBonus,
         retailSales,
-        wholesaleSales
+        wholesaleSales,
+        monthlyRetailSales: newMonthlyRetailSales
       });
       
       // Lokal state'ni darhol yangilaymiz
@@ -528,7 +557,7 @@ export default function App() {
           ...branch,
           employees: branch.employees.map(emp => 
             emp.id === employeeId 
-              ? { ...emp, dailySales: retailSales, wholesaleSales: wholesaleSales, fixedBonus: fixedBonus, personalBonus: personalBonus, teamVolumeBonus: teamVolumeBonus }
+              ? { ...emp, dailySales: retailSales, wholesaleSales: wholesaleSales, fixedBonus: fixedBonus, personalBonus: personalBonus, teamVolumeBonus: teamVolumeBonus, salesShareBonus: salesShareBonus, monthlyRetailSales: newMonthlyRetailSales }
               : emp
           )
         }))
@@ -543,7 +572,9 @@ export default function App() {
         wholesaleSales: wholesaleSales,
         fixedBonus: fixedBonus,
         personalBonus: personalBonus,
-        teamVolumeBonus: teamVolumeBonus
+        teamVolumeBonus: teamVolumeBonus,
+        salesShareBonus: salesShareBonus,
+        monthlyRetailSales: newMonthlyRetailSales
       };
       
       console.log('📤 Sending to server:', updateData);
@@ -884,7 +915,7 @@ export default function App() {
     }
     
     // Standart oylik (bonus) qo'shish
-    return calculatedSalary + (employee.fixedBonus || 0) + (employee.personalBonus || 0) + (employee.teamVolumeBonus || 0);
+    return calculatedSalary + (employee.fixedBonus || 0) + (employee.personalBonus || 0) + (employee.teamVolumeBonus || 0) + (employee.salesShareBonus || 0) + (employee.planBonus || 0);
   };
 
   // Jarima summasini hisoblash (real-time) - BARCHA XODIMLAR UCHUN
@@ -1258,7 +1289,7 @@ export default function App() {
 
           {/* Boshqalar */}
           <div> 
-            <h2 className="text-xs font-bold text-gray-500 uppercase tracking-wider mb-3 px-3 ">Boshqalar <hr /> </h2> 
+            <h2 className="text-xs font-bold text-gray-500 uppercase tracking-wider mb-3 px-3 "><hr /> </h2> 
             <div className="space-y-1">
               {/* Tarix - faqat admin va manager uchun */}
               {userRole !== 'gijduvon_manager' && userRole !== 'navoi_manager' && (
@@ -1370,6 +1401,32 @@ export default function App() {
                   <span className="truncate">Hisobotlar</span>
                 </div>
               </button>
+
+              {/* Oylik Plan - BARCHA UCHUN */}
+              <button
+                onClick={() => {
+                  setActiveView("plans");
+                  setIsMobileSidebarOpen(false);
+                }}
+                className={`w-full text-left px-4 py-3 rounded-xl text-sm font-semibold transition-all group ${
+                  activeView === "plans"
+                    ? "bg-gradient-to-r from-[#F87819] to-[#ff8c3a] text-white shadow-lg shadow-orange-500/30"
+                    : "text-gray-300 hover:bg-gray-800/50 hover:text-white"
+                }`}
+              >
+                <div className="flex items-center gap-3">
+                  <div className={`w-10 h-10 rounded-xl flex items-center justify-center transition-all ${
+                    activeView === "plans"
+                      ? "bg-white/20"
+                      : "bg-gray-800 group-hover:bg-gray-700"
+                  }`}>
+                    <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M9 12l2 2 4-4M7.835 4.697a3.42 3.42 0 001.946-.806 3.42 3.42 0 014.438 0 3.42 3.42 0 001.946.806 3.42 3.42 0 013.138 3.138 3.42 3.42 0 00.806 1.946 3.42 3.42 0 010 4.438 3.42 3.42 0 00-.806 1.946 3.42 3.42 0 01-3.138 3.138 3.42 3.42 0 00-1.946.806 3.42 3.42 0 01-4.438 0 3.42 3.42 0 00-1.946-.806 3.42 3.42 0 01-3.138-3.138 3.42 3.42 0 00-.806-1.946 3.42 3.42 0 010-4.438 3.42 3.42 0 00.806-1.946 3.42 3.42 0 013.138-3.138z" />
+                    </svg>
+                  </div>
+                  <span className="truncate">Oylik Plan</span>
+                </div>
+              </button>
             </div>
           </div>
         </div>
@@ -1455,7 +1512,8 @@ export default function App() {
             {activeView === "branches" ? currentBranch?.name : 
              activeView === "history" ? "Tarix" :
              activeView === "penalties" ? "Jarimalar" : 
-             activeView === "reports" ? "Hisobotlar" : "Kunlik Ishlar"}
+             activeView === "reports" ? "Hisobotlar" :
+             activeView === "plans" ? "Oylik Plan" : "Kunlik Ishlar"}
           </h1>
           {/* Dark Mode Toggle - Mobile */}
           <button
@@ -1490,7 +1548,11 @@ export default function App() {
               <div className="flex items-center gap-3">
                 <button
                   onClick={() => setShowAddPosition(true)}
-                  className="px-6 py-2.5 bg-gray-900 text-white text-sm font-bold rounded-lg hover:bg-gray-800 transition-all shadow-lg flex items-center gap-2"
+                  className={`px-6 py-2.5 text-white text-sm font-bold rounded-lg transition-all shadow-lg flex items-center gap-2 ${
+                    isDarkMode 
+                      ? 'bg-gray-700 hover:bg-gray-600' 
+                      : 'bg-gray-900 hover:bg-gray-800'
+                  }`}
                 >
                   <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
@@ -1593,42 +1655,43 @@ export default function App() {
           </div>
 
           {/* Sales Card */}
-          {/* Barcha filiallar uchun chakana va optom alohida */}
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 md:gap-6 mb-6">
-            <div className="bg-white rounded-xl border-2 border-gray-900 p-6 shadow-lg">
-              <p className="text-sm text-gray-600 font-semibold mb-2">Umumiy Savdo</p>
-              <p className="text-2xl font-bold text-gray-900">
+          {/* 3ta asosiy card - tartibli joylashtirilgan */}
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4 md:gap-6 mb-6">
+            
+            <div className={`rounded-xl border-2 p-6 shadow-lg ${isDarkMode ? 'bg-gray-800 border-gray-700' : 'bg-white border-gray-900'}`}>
+              <p className={`text-sm font-semibold mb-2 ${isDarkMode ? 'text-gray-400' : 'text-gray-600'}`}>Umumiy Savdo</p>
+              <p className={`text-2xl font-bold ${isDarkMode ? 'text-white' : 'text-gray-900'}`}>
                 {formatMoney(currentBranch.totalSales || 0)}
               </p>
               {currentBranch.name === "Asosiy Sklad" && (
-                <p className="text-xs text-gray-500 mt-3">Filiallar yig'indisi</p>
+                <p className={`text-xs mt-3 ${isDarkMode ? 'text-gray-500' : 'text-gray-500'}`}>Filiallar yig'indisi</p>
               )}
             </div>
             
-            <div className="bg-white rounded-xl border-2 border-green-500 p-6 shadow-lg">
+            <div className={`rounded-xl border-2 border-green-500 p-6 shadow-lg ${isDarkMode ? 'bg-gray-800' : 'bg-white'}`}>
               <p className="text-sm text-green-600 font-semibold mb-2">Chakana Savdo</p>
-              <p className="text-2xl font-bold text-gray-900">
+              <p className={`text-2xl font-bold ${isDarkMode ? 'text-white' : 'text-gray-900'}`}>
                 {formatMoney(currentBranch.retailSales || 0)}
               </p>
               {currentBranch.name === "Asosiy Sklad" && (
-                <p className="text-xs text-gray-500 mt-3">Filiallar yig'indisi</p>
+                <p className={`text-xs mt-3 ${isDarkMode ? 'text-gray-500' : 'text-gray-500'}`}>Filiallar yig'indisi</p>
               )}
             </div>
             
-            <div className="bg-white rounded-xl border-2 border-blue-500 p-6 shadow-lg">
+            <div className={`rounded-xl border-2 border-blue-500 p-6 shadow-lg ${isDarkMode ? 'bg-gray-800' : 'bg-white'}`}>
               <p className="text-sm text-blue-600 font-semibold mb-2">Optom Savdo</p>
-              <p className="text-2xl font-bold text-gray-900">
+              <p className={`text-2xl font-bold ${isDarkMode ? 'text-white' : 'text-gray-900'}`}>
                 {formatMoney(currentBranch.wholesaleSales || 0)}
               </p>
               {currentBranch.name === "Asosiy Sklad" && (
-                <p className="text-xs text-gray-500 mt-3">Filiallar yig'indisi</p>
+                <p className={`text-xs mt-3 ${isDarkMode ? 'text-gray-500' : 'text-gray-500'}`}>Filiallar yig'indisi</p>
               )}
             </div>
           </div>
 
           {/* Employees Section */}
-          <div className="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden">
-            <div className="px-6 py-4 bg-gray-900 border-b border-gray-800 flex items-center justify-between">
+          <div className={`rounded-xl border shadow-sm overflow-hidden ${isDarkMode ? 'bg-gray-800 border-gray-700' : 'bg-white border-gray-200'}`}>
+            <div className={`px-6 py-4 border-b flex items-center justify-between ${isDarkMode ? 'bg-gray-900 border-gray-700' : 'bg-gray-900 border-gray-800'}`}>
               <h2 className="text-lg font-bold text-white">Xodimlar</h2>
               {isAuthenticated && userRole === 'admin' && (
                 <button
@@ -1642,13 +1705,13 @@ export default function App() {
 
             {currentBranch.employees.length === 0 ? (
               <div className="p-12 text-center">
-                <div className="inline-flex items-center justify-center w-16 h-16 bg-gray-100 rounded-full mb-4">
-                  <svg className="w-8 h-8 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <div className={`inline-flex items-center justify-center w-16 h-16 rounded-full mb-4 ${isDarkMode ? 'bg-gray-700' : 'bg-gray-100'}`}>
+                  <svg className={`w-8 h-8 ${isDarkMode ? 'text-gray-500' : 'text-gray-400'}`} fill="none" viewBox="0 0 24 24" stroke="currentColor">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z" />
                   </svg>
                 </div>
-                <p className="text-base font-medium text-gray-900 mb-1">Hozircha xodimlar yo'q</p>
-                <p className="text-sm text-gray-500">Yuqoridagi tugma orqali xodim qo'shing</p>
+                <p className={`text-base font-medium mb-1 ${isDarkMode ? 'text-white' : 'text-gray-900'}`}>Hozircha xodimlar yo'q</p>
+                <p className={`text-sm ${isDarkMode ? 'text-gray-400' : 'text-gray-500'}`}>Yuqoridagi tugma orqali xodim qo'shing</p>
               </div>
             ) : (
               <>
@@ -2657,6 +2720,246 @@ export default function App() {
             )}
           </div>
         )}
+
+        {/* Oylik Plan Sahifasi */}
+        {activeView === "plans" && (
+          <div className="w-full mx-auto p-4 md:p-6 lg:p-8 max-w-[1920px]">
+            {/* Header */}
+            <div className="mb-8">
+              <h1 className={`text-3xl font-bold mb-2 ${isDarkMode ? 'text-white' : 'text-gray-900'}`}>
+                Oylik Plan
+              </h1>
+              <p className={`text-sm ${isDarkMode ? 'text-gray-400' : 'text-gray-500'}`}>
+                Sotuvchilar uchun oylik plan va bonuslar
+              </p>
+            </div>
+
+            {/* Filiallar tanlash */}
+            <div className="mb-8">
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+                {filteredBranches.map((branch, index) => {
+                  const sellersCount = branch.employees.filter(emp => emp.position === 'sotuvchi').length;
+                  const completedPlans = branch.employees
+                    .filter(emp => emp.position === 'sotuvchi')
+                    .filter(emp => (emp.monthlyRetailSales || 0) >= (emp.monthlyPlan || 500000000))
+                    .length;
+                  
+                  return (
+                    <button
+                      key={branch._id}
+                      onClick={() => setActiveBranch(index)}
+                      className={`p-6 rounded-xl border-2 transition-all text-left ${
+                        activeBranch === index
+                          ? 'border-[#F87819] bg-gradient-to-br from-orange-50 to-yellow-50 shadow-lg scale-105'
+                          : isDarkMode
+                          ? 'border-gray-700 bg-gray-800 hover:border-gray-600 hover:shadow-md'
+                          : 'border-gray-200 bg-white hover:border-gray-300 hover:shadow-md'
+                      }`}
+                    >
+                      <div className="flex items-start justify-between mb-3">
+                        <div>
+                          <h3 className={`text-lg font-bold mb-1 ${
+                            activeBranch === index 
+                              ? 'text-[#F87819]' 
+                              : isDarkMode ? 'text-white' : 'text-gray-900'
+                          }`}>
+                            {branch.name}
+                          </h3>
+                          <p className={`text-sm ${
+                            activeBranch === index 
+                              ? 'text-orange-600' 
+                              : isDarkMode ? 'text-gray-400' : 'text-gray-500'
+                          }`}>
+                            {sellersCount} ta sotuvchi
+                          </p>
+                        </div>
+                        {activeBranch === index && (
+                          <div className="w-10 h-10 bg-[#F87819] rounded-full flex items-center justify-center">
+                            <svg className="w-6 h-6 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={3}>
+                              <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
+                            </svg>
+                          </div>
+                        )}
+                      </div>
+                      
+                      {sellersCount > 0 && (
+                        <div className={`flex items-center gap-2 text-sm ${
+                          activeBranch === index 
+                            ? 'text-orange-700' 
+                            : isDarkMode ? 'text-gray-400' : 'text-gray-600'
+                        }`}>
+                          <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4M7.835 4.697a3.42 3.42 0 001.946-.806 3.42 3.42 0 014.438 0 3.42 3.42 0 001.946.806 3.42 3.42 0 013.138 3.138 3.42 3.42 0 00.806 1.946 3.42 3.42 0 010 4.438 3.42 3.42 0 00-.806 1.946 3.42 3.42 0 01-3.138 3.138 3.42 3.42 0 00-1.946.806 3.42 3.42 0 01-4.438 0 3.42 3.42 0 00-1.946-.806 3.42 3.42 0 01-3.138-3.138 3.42 3.42 0 00-.806-1.946 3.42 3.42 0 010-4.438 3.42 3.42 0 00.806-1.946 3.42 3.42 0 013.138-3.138z" />
+                          </svg>
+                          <span className="font-semibold">
+                            {completedPlans} / {sellersCount} plan bajarildi
+                          </span>
+                        </div>
+                      )}
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+
+            {/* Tanlangan filial nomi */}
+            <div className="mb-6">
+              <h2 className={`text-2xl font-bold ${isDarkMode ? 'text-white' : 'text-gray-900'}`}>
+                {currentBranch.name} - Sotuvchilar
+              </h2>
+            </div>
+
+            {/* Sotuvchilar ro'yxati */}
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+              {currentBranch.employees
+                .filter(emp => emp.position === 'sotuvchi')
+                .map((employee) => {
+                  const monthlyPlan = employee.monthlyPlan || 500000000;
+                  const monthlyRetailSales = employee.monthlyRetailSales || 0;
+                  const progress = (monthlyRetailSales / monthlyPlan) * 100;
+                  const isPlanCompleted = monthlyRetailSales >= monthlyPlan;
+                  
+                  return (
+                    <div
+                      key={employee.id}
+                      className={`rounded-xl border-2 overflow-hidden shadow-lg transition-all hover:shadow-xl ${
+                        isDarkMode ? 'bg-gray-800 border-gray-700' : 'bg-white border-gray-200'
+                      }`}
+                    >
+                      {/* Header */}
+                      <div className={`px-6 py-4 ${
+                        isPlanCompleted 
+                          ? 'bg-gradient-to-r from-green-500 to-emerald-600' 
+                          : 'bg-gradient-to-r from-[#F87819] to-[#ff8c3a]'
+                      }`}>
+                        <div className="flex items-center justify-between">
+                          <div>
+                            <h3 className="text-lg font-bold text-white">{employee.name}</h3>
+                            <p className="text-sm text-white/80">Sotuvchi</p>
+                          </div>
+                          {isPlanCompleted && (
+                            <div className="w-12 h-12 bg-white/20 rounded-full flex items-center justify-center">
+                              <svg className="w-7 h-7 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={3}>
+                                <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
+                              </svg>
+                            </div>
+                          )}
+                        </div>
+                      </div>
+
+                      {/* Content */}
+                      <div className="p-6 space-y-4">
+                        {/* Plan */}
+                        <div>
+                          <div className="flex justify-between items-center mb-2">
+                            <span className={`text-sm font-medium ${isDarkMode ? 'text-gray-400' : 'text-gray-600'}`}>
+                              Oylik Plan
+                            </span>
+                            <span className={`text-lg font-bold ${isDarkMode ? 'text-white' : 'text-gray-900'}`}>
+                              {formatMoney(monthlyPlan)}
+                            </span>
+                          </div>
+                          
+                          {/* Progress Bar */}
+                          <div className="relative w-full h-3 bg-gray-200 rounded-full overflow-hidden">
+                            <div
+                              className={`absolute top-0 left-0 h-full transition-all duration-500 ${
+                                isPlanCompleted 
+                                  ? 'bg-gradient-to-r from-green-500 to-emerald-600' 
+                                  : 'bg-gradient-to-r from-[#F87819] to-[#ff8c3a]'
+                              }`}
+                              style={{ width: `${Math.min(progress, 100)}%` }}
+                            />
+                          </div>
+                          
+                          <div className="flex justify-between items-center mt-2">
+                            <span className={`text-xs font-medium ${isDarkMode ? 'text-gray-400' : 'text-gray-600'}`}>
+                              {progress.toFixed(1)}% bajarildi
+                            </span>
+                            <span className={`text-xs font-bold ${
+                              isPlanCompleted ? 'text-green-600' : isDarkMode ? 'text-gray-400' : 'text-gray-600'
+                            }`}>
+                              {isPlanCompleted ? '✓ Bajarildi' : 'Jarayonda'}
+                            </span>
+                          </div>
+                        </div>
+
+                        {/* Hozirgi savdo */}
+                        <div className={`rounded-lg p-4 ${isDarkMode ? 'bg-gray-700' : 'bg-gray-50'}`}>
+                          <div className="flex justify-between items-center">
+                            <span className={`text-sm font-medium ${isDarkMode ? 'text-gray-400' : 'text-gray-600'}`}>
+                              Hozirgi Savdo
+                            </span>
+                            <span className={`text-xl font-bold ${
+                              isPlanCompleted ? 'text-green-600' : isDarkMode ? 'text-white' : 'text-gray-900'
+                            }`}>
+                              {formatMoney(monthlyRetailSales)}
+                            </span>
+                          </div>
+                        </div>
+
+                        {/* Qolgan summa */}
+                        {!isPlanCompleted && (
+                          <div className={`rounded-lg p-4 border-2 ${isDarkMode ? 'bg-gray-700 border-gray-600' : 'bg-orange-50 border-orange-200'}`}>
+                            <div className="flex justify-between items-center">
+                              <span className={`text-sm font-medium ${isDarkMode ? 'text-gray-400' : 'text-orange-700'}`}>
+                                Qolgan
+                              </span>
+                              <span className={`text-xl font-bold ${isDarkMode ? 'text-white' : 'text-orange-700'}`}>
+                                {formatMoney(monthlyPlan - monthlyRetailSales)}
+                              </span>
+                            </div>
+                          </div>
+                        )}
+
+                        {/* Bonus */}
+                        <div className={`rounded-lg p-4 ${
+                          isPlanCompleted 
+                            ? 'bg-gradient-to-r from-green-500 to-emerald-600' 
+                            : isDarkMode ? 'bg-gray-700' : 'bg-gray-100'
+                        }`}>
+                          <div className="flex justify-between items-center">
+                            <span className={`text-sm font-medium ${
+                              isPlanCompleted ? 'text-white' : isDarkMode ? 'text-gray-400' : 'text-gray-600'
+                            }`}>
+                              Plan Bonusi
+                            </span>
+                            <span className={`text-2xl font-bold ${
+                              isPlanCompleted ? 'text-white' : isDarkMode ? 'text-gray-500' : 'text-gray-400'
+                            }`}>
+                              {isPlanCompleted ? '+ ' : ''}1,000,000 so'm
+                            </span>
+                          </div>
+                          {!isPlanCompleted && (
+                            <p className={`text-xs mt-2 ${isDarkMode ? 'text-green-600' : 'text-green-600'}`}>
+                              <span className="text-lg">✅</span> <span className="text-lg">Planni bajaring va bonus oling</span>
+                            </p>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })}
+            </div>
+
+            {/* Agar sotuvchi bo'lmasa */}
+            {currentBranch.employees.filter(emp => emp.position === 'sotuvchi').length === 0 && (
+              <div className={`rounded-xl border-2 p-12 text-center ${isDarkMode ? 'bg-gray-800 border-gray-700' : 'bg-white border-gray-200'}`}>
+                <div className={`inline-flex items-center justify-center w-16 h-16 rounded-full mb-4 ${isDarkMode ? 'bg-gray-700' : 'bg-gray-100'}`}>
+                  <svg className={`w-8 h-8 ${isDarkMode ? 'text-gray-500' : 'text-gray-400'}`} fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z" />
+                  </svg>
+                </div>
+                <p className={`text-base font-medium mb-1 ${isDarkMode ? 'text-white' : 'text-gray-900'}`}>
+                  Sotuvchi topilmadi
+                </p>
+                <p className={`text-sm ${isDarkMode ? 'text-gray-400' : 'text-gray-500'}`}>
+                  Bu filialda hozircha sotuvchi xodimlar yo'q
+                </p>
+              </div>
+            )}
+          </div>
+        )}
       </div>
 
       {/* Modal - Yangi Xodim */}
@@ -2937,30 +3240,26 @@ export default function App() {
       {/* Modal - Kunlik Savdo (Sotuvchi uchun) */}
       {showSalesModal && selectedEmployee && (
         <div className="fixed inset-0 bg-black/70 backdrop-blur-sm flex items-center justify-center z-50 p-4">
-          <div className={`rounded-2xl shadow-2xl max-w-3xl w-full max-h-[90vh] overflow-y-auto ${isDarkMode ? 'bg-gray-800' : 'bg-white'}`}>
-            {/* Header */}
-            <div className="sticky top-0 z-10 px-6 py-5 bg-gradient-to-r from-[#F87819] to-[#ff8c3a]">
+          <div className={`rounded-2xl shadow-2xl w-full max-w-2xl flex flex-col max-h-[92vh] ${isDarkMode ? 'bg-gray-800' : 'bg-white'}`}>
+            {/* Header - Sticky */}
+            <div className="flex-shrink-0 px-6 py-5 bg-gradient-to-r from-[#F87819] to-[#ff8c3a] rounded-t-2xl">
               <div className="flex items-center gap-3">
-                <div className="w-12 h-12 rounded-full bg-white/20 flex items-center justify-center">
+                <div className="w-12 h-12 rounded-full bg-white/20 flex items-center justify-center flex-shrink-0">
                   <svg className="w-6 h-6 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 11V7a4 4 0 00-8 0v4M5 9h14l1 12H4L5 9z" />
                   </svg>
                 </div>
-                <div>
-                  <h3 className="text-xl font-bold text-white">Kunlik Savdo</h3>
-                  <p className="text-sm text-white/90 mt-0.5">
+                <div className="flex-1 min-w-0">
+                  <h3 className="text-xl font-bold text-white truncate">Kunlik Savdo</h3>
+                  <p className="text-sm text-white/90 mt-0.5 truncate">
                     {selectedEmployee.name}
-                    {selectedEmployee.lastSalesDate && (
-                      <span className="ml-2 text-xs bg-white/20 px-2 py-0.5 rounded">
-                        Oxirgi: {new Date(selectedEmployee.lastSalesDate).toLocaleDateString('uz-UZ')}
-                      </span>
-                    )}
                   </p>
                 </div>
               </div>
             </div>
 
-            <div className="p-6 space-y-6">
+            {/* Content - Scrollable with hidden scrollbar */}
+            <div className="flex-1 overflow-y-auto scrollbar-hide p-6 space-y-5">
               {/* SAVDO BO'LIMI */}
               <div className={`rounded-xl p-4 ${isDarkMode ? 'bg-gray-700/50' : 'bg-gray-50'}`}>
                 <div className="flex items-center gap-2 mb-4">
@@ -3148,11 +3447,31 @@ export default function App() {
                       💡 Jamoa natijasi uchun mukofot
                     </p>
                   </div>
+
+                  {/* Jami Savdodan Ulush Bonusi */}
+                  <div>
+                    <label className={`flex items-center gap-2 text-sm font-bold mb-2 ${isDarkMode ? 'text-white' : 'text-gray-900'}`}>
+                      <span className="w-2 h-2 rounded-full bg-emerald-500"></span>
+                      Jami Savdodan Ulush (0.5%)
+                    </label>
+                    <input
+                      type="text"
+                      value={salesShareBonusInput}
+                      readOnly
+                      className={`w-full px-4 py-3 border-2 border-emerald-300 rounded-xl text-lg font-bold bg-emerald-50 cursor-not-allowed ${
+                        isDarkMode ? 'bg-gray-700/50 text-gray-300' : 'bg-emerald-50 text-gray-700'
+                      }`}
+                      placeholder="0"
+                    />
+                    <p className={`text-xs mt-1 ${isDarkMode ? 'text-gray-400' : 'text-gray-500'}`}>
+                      💡 Avtomatik: Chakana savdo × 0.5% ÷ {currentBranch?.employees.filter(emp => emp.position === 'sotuvchi').length || 0} sotuvchi
+                    </p>
+                  </div>
                 </div>
               </div>
 
               {/* Hisoblash ko'rsatish */}
-              {(dailySalesInput || wholesaleSalesInput || (bonusInput && parseFloat(bonusInput.replace(/,/g, "")) > 0) || (personalBonusInput && parseFloat(personalBonusInput.replace(/,/g, "")) > 0) || (teamVolumeBonusInput && parseFloat(teamVolumeBonusInput.replace(/,/g, "")) > 0)) && (
+              {(dailySalesInput || wholesaleSalesInput || (bonusInput && parseFloat(bonusInput.replace(/,/g, "")) > 0) || (personalBonusInput && parseFloat(personalBonusInput.replace(/,/g, "")) > 0) || (teamVolumeBonusInput && parseFloat(teamVolumeBonusInput.replace(/,/g, "")) > 0) || (salesShareBonusInput && parseFloat(salesShareBonusInput.replace(/,/g, "")) > 0)) && (
                 <div className="bg-gradient-to-br from-orange-50 to-yellow-50 rounded-xl p-5 border-2 border-[#F87819]">
                   <div className="flex items-center gap-2 mb-3">
                     <svg className="w-5 h-5 text-[#F87819]" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -3217,6 +3536,17 @@ export default function App() {
                         </span>
                       </div>
                     )}
+                    {salesShareBonusInput && parseFloat(salesShareBonusInput.replace(/,/g, "")) > 0 && (
+                      <div className="flex justify-between items-center py-1">
+                        <span className="flex items-center gap-2">
+                          <span className="w-2 h-2 rounded-full bg-emerald-500"></span>
+                          Savdo ulushi (0.5%):
+                        </span>
+                        <span className="font-bold text-emerald-600">
+                          + {formatMoney(parseFloat(salesShareBonusInput.replace(/,/g, "")) || 0)}
+                        </span>
+                      </div>
+                    )}
                     
                     <div className="flex justify-between items-center pt-3 mt-3 border-t-2 border-orange-300">
                       <span className="font-bold text-base">JAMI OYLIK:</span>
@@ -3226,7 +3556,8 @@ export default function App() {
                           ((parseFloat(wholesaleSalesInput.replace(/,/g, "")) || 0) * selectedEmployee.percentage / 100 / 2) +
                           (parseFloat(bonusInput.replace(/,/g, "")) || 0) +
                           (parseFloat(personalBonusInput.replace(/,/g, "")) || 0) +
-                          (parseFloat(teamVolumeBonusInput.replace(/,/g, "")) || 0)
+                          (parseFloat(teamVolumeBonusInput.replace(/,/g, "")) || 0) +
+                          (parseFloat(salesShareBonusInput.replace(/,/g, "")) || 0)
                         )}
                       </span>
                     </div>
@@ -3254,6 +3585,7 @@ export default function App() {
                   setBonusInput("");
                   setPersonalBonusInput("");
                   setTeamVolumeBonusInput("");
+                  setSalesShareBonusInput("");
                 }}
                 className={`flex-1 px-4 py-3 border-2 text-sm font-bold rounded-xl transition-all ${
                   isDarkMode 
@@ -3459,12 +3791,6 @@ export default function App() {
                   <p className="text-sm text-blue-600 mb-1">Umumiy savdo</p>
                   <p className="text-2xl font-semibold text-blue-900">
                     {formatMoney(selectedHistoryRecord.totalSales)}
-                  </p>
-                </div>
-                <div className="bg-green-50 rounded-lg p-4">
-                  <p className="text-sm text-green-600 mb-1">Jami oyliklar</p>
-                  <p className="text-2xl font-semibold text-green-900">
-                    {formatMoney(selectedHistoryRecord.employees.reduce((sum: number, emp: any) => sum + (emp.salary || 0), 0))}
                   </p>
                 </div>
               </div>

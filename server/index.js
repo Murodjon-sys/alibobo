@@ -40,7 +40,11 @@ const employeeSchema = new mongoose.Schema({
   lastSalesDate: { type: String, default: null }, // Oxirgi savdo kiritilgan sana (YYYY-MM-DD)
   fixedBonus: { type: Number, default: 0 }, // Standart oylik (bonus)
   personalBonus: { type: Number, default: 0 }, // Shaxsiy bonus (individual bonus)
-  teamVolumeBonus: { type: Number, default: 0 } // Jamoaviy abyom bonusi (team volume bonus)
+  teamVolumeBonus: { type: Number, default: 0 }, // Jamoaviy abyom bonusi (team volume bonus)
+  salesShareBonus: { type: Number, default: 0 }, // Jami savdodan ulush bonusi (0.5% / sotuvchilar soni)
+  monthlyPlan: { type: Number, default: 500000000 }, // Oylik plan (faqat sotuvchilar uchun)
+  monthlyRetailSales: { type: Number, default: 0 }, // Oylik chakana savdo (plan uchun)
+  planBonus: { type: Number, default: 0 } // Plan bajarilsa bonus (1,000,000)
 });
 
 const branchSchema = new mongoose.Schema({
@@ -73,7 +77,10 @@ const dailySalesHistorySchema = new mongoose.Schema({
     penaltyAmount: { type: Number, default: 0 }, // Xodimdan ayrilgan jarima
     fixedBonus: { type: Number, default: 0 }, // Standart oylik (bonus)
     personalBonus: { type: Number, default: 0 }, // Shaxsiy bonus
-    teamVolumeBonus: { type: Number, default: 0 } // Jamoaviy abyom bonusi
+    teamVolumeBonus: { type: Number, default: 0 }, // Jamoaviy abyom bonusi
+    salesShareBonus: { type: Number, default: 0 }, // Jami savdodan ulush bonusi
+    planBonus: { type: Number, default: 0 }, // Plan bajarilsa bonus
+    monthlyRetailSales: { type: Number, default: 0 } // Oylik chakana savdo
   }]
 }, { timestamps: true });
 
@@ -308,7 +315,11 @@ app.get('/api/branches', async (req, res) => {
             lastSalesDate: emp.lastSalesDate,
             fixedBonus: emp.fixedBonus || 0,
             personalBonus: emp.personalBonus || 0,
-            teamVolumeBonus: emp.teamVolumeBonus || 0
+            teamVolumeBonus: emp.teamVolumeBonus || 0,
+            salesShareBonus: emp.salesShareBonus || 0,
+            monthlyPlan: emp.monthlyPlan || 500000000,
+            monthlyRetailSales: emp.monthlyRetailSales || 0,
+            planBonus: emp.planBonus || 0
           };
         }));
         
@@ -439,6 +450,27 @@ app.put('/api/employees/:id', async (req, res) => {
       console.log(`  ✅ Setting teamVolumeBonus to ${req.body.teamVolumeBonus}`);
     }
     
+    // Agar salesShareBonus berilgan bo'lsa, uni ham yangilaymiz
+    if (req.body.salesShareBonus !== undefined) {
+      updateData.salesShareBonus = req.body.salesShareBonus;
+      console.log(`  ✅ Setting salesShareBonus to ${req.body.salesShareBonus}`);
+    }
+    
+    // Agar monthlyPlan berilgan bo'lsa, uni ham yangilaymiz
+    if (req.body.monthlyPlan !== undefined) {
+      updateData.monthlyPlan = req.body.monthlyPlan;
+    }
+    
+    // Agar monthlyRetailSales berilgan bo'lsa, uni ham yangilaymiz
+    if (req.body.monthlyRetailSales !== undefined) {
+      updateData.monthlyRetailSales = req.body.monthlyRetailSales;
+    }
+    
+    // Agar planBonus berilgan bo'lsa, uni ham yangilaymiz
+    if (req.body.planBonus !== undefined) {
+      updateData.planBonus = req.body.planBonus;
+    }
+    
     // Agar dailySales yoki wholesaleSales yangilansa, bugungi sanani saqlaymiz
     if (req.body.dailySales !== undefined || req.body.wholesaleSales !== undefined) {
       const today = new Date().toISOString().split('T')[0]; // YYYY-MM-DD
@@ -456,7 +488,8 @@ app.put('/api/employees/:id', async (req, res) => {
     console.log(`✅ Saved successfully! Employee bonuses:`, {
       fixedBonus: employee.fixedBonus,
       personalBonus: employee.personalBonus,
-      teamVolumeBonus: employee.teamVolumeBonus
+      teamVolumeBonus: employee.teamVolumeBonus,
+      salesShareBonus: employee.salesShareBonus
     });
     res.json({
       id: employee._id.toString(),
@@ -469,7 +502,11 @@ app.put('/api/employees/:id', async (req, res) => {
       lastSalesDate: employee.lastSalesDate,
       fixedBonus: employee.fixedBonus || 0,
       personalBonus: employee.personalBonus || 0,
-      teamVolumeBonus: employee.teamVolumeBonus || 0
+      teamVolumeBonus: employee.teamVolumeBonus || 0,
+      salesShareBonus: employee.salesShareBonus || 0,
+      monthlyPlan: employee.monthlyPlan || 500000000,
+      monthlyRetailSales: employee.monthlyRetailSales || 0,
+      planBonus: employee.planBonus || 0
     });
   } catch (error) {
     res.status(400).json({ error: error.message });
@@ -814,6 +851,10 @@ app.post('/api/history/save-daily', async (req, res) => {
         salary += (emp.personalBonus || 0);
         // Jamoaviy abyom bonusi qo'shamiz
         salary += (emp.teamVolumeBonus || 0);
+        // Jami savdodan ulush bonusi qo'shamiz
+        salary += (emp.salesShareBonus || 0);
+        // Plan bonusini qo'shamiz
+        salary += (emp.planBonus || 0);
       } else {
         // Boshqa xodimlar uchun chakana va optom savdodan hisoblash
         const retailSalary = (branch.retailSales || 0) * emp.percentage / 100;
@@ -841,6 +882,10 @@ app.post('/api/history/save-daily', async (req, res) => {
         salary += (emp.personalBonus || 0);
         // Jamoaviy abyom bonusi qo'shamiz
         salary += (emp.teamVolumeBonus || 0);
+        // Jami savdodan ulush bonusi qo'shamiz
+        salary += (emp.salesShareBonus || 0);
+        // Plan bonusini qo'shamiz
+        salary += (emp.planBonus || 0);
       }
       
       return {
@@ -855,7 +900,10 @@ app.post('/api/history/save-daily', async (req, res) => {
         penaltyAmount: penaltyAmount,
         fixedBonus: emp.fixedBonus || 0, // Standart oylik qo'shamiz
         personalBonus: emp.personalBonus || 0, // Shaxsiy bonus qo'shamiz
-        teamVolumeBonus: emp.teamVolumeBonus || 0 // Jamoaviy abyom bonusi qo'shamiz
+        teamVolumeBonus: emp.teamVolumeBonus || 0, // Jamoaviy abyom bonusi qo'shamiz
+        salesShareBonus: emp.salesShareBonus || 0, // Jami savdodan ulush bonusi qo'shamiz
+        planBonus: emp.planBonus || 0, // Plan bonusi qo'shamiz
+        monthlyRetailSales: emp.monthlyRetailSales || 0 // Oylik chakana savdo
       };
     });
     
@@ -913,13 +961,26 @@ app.post('/api/history/save-daily', async (req, res) => {
     console.log(`📊 Found ${employeesToReset.length} employees to reset`);
     
     for (const emp of employeesToReset) {
+      // Plan bonusini tekshirish (faqat sotuvchilar uchun)
+      let planBonusToSave = 0;
+      if (emp.position === 'sotuvchi') {
+        const monthlyPlan = emp.monthlyPlan || 500000000;
+        const monthlyRetailSales = emp.monthlyRetailSales || 0;
+        if (monthlyRetailSales >= monthlyPlan) {
+          planBonusToSave = 1000000; // Plan bajarildi, bonus beramiz
+        }
+      }
+      
       await Employee.findByIdAndUpdate(emp._id, {
         dailySales: 0,
         wholesaleSales: 0,
         lastSalesDate: null,
         fixedBonus: 0,
         personalBonus: 0,
-        teamVolumeBonus: 0
+        teamVolumeBonus: 0,
+        salesShareBonus: 0,
+        monthlyRetailSales: 0, // Oylik savdoni 0 ga qaytaramiz
+        planBonus: planBonusToSave // Plan bonusini saqlaymiz (keyingi oy uchun)
       });
       console.log(`  ✅ Reset: ${emp.name} - Barcha ma'lumotlar 0 ga qaytarildi (tarixga saqlandi)`);
     }
