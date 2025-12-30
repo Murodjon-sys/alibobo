@@ -38,7 +38,7 @@ export default function App() {
   const [showBonusModal, setShowBonusModal] = useState(false);
   const [bonusInput, setBonusInput] = useState("");
   const [personalBonusInput, setPersonalBonusInput] = useState(""); // Shaxsiy bonus
-  const [teamVolumeBonusInput, setTeamVolumeBonusInput] = useState(""); // Jamoaviy abyom bonusi
+  const [teamVolumeBonusInput, setTeamVolumeBonusInput] = useState(""); // O'zi qilgan savdodan 0.5%
   const [salesShareBonusInput, setSalesShareBonusInput] = useState(""); // Jami savdodan ulush bonusi
   const [showAddTaskModal, setShowAddTaskModal] = useState(false);
   const [showEditTaskModal, setShowEditTaskModal] = useState(false);
@@ -461,8 +461,11 @@ export default function App() {
       setPersonalBonusInput("");
     }
     
-    if (employee.teamVolumeBonus && employee.teamVolumeBonus > 0) {
-      setTeamVolumeBonusInput(formatNumber(employee.teamVolumeBonus));
+    // O'zi qilgan savdodan 0.5% hisoblash (faqat chakana savdo)
+    const employeeRetailSales = employee.dailySales || 0;
+    const personalSalesBonus = (employeeRetailSales * 0.5) / 100;
+    if (personalSalesBonus > 0) {
+      setTeamVolumeBonusInput(formatNumber(Math.round(personalSalesBonus)));
     } else {
       setTeamVolumeBonusInput("");
     }
@@ -2143,62 +2146,25 @@ export default function App() {
         {activeView === "history" && (
           <div className="w-full mx-auto p-4 md:p-6 lg:p-8 max-w-[1920px]">
             {/* Tarix sahifasi */}
-            <div className="mb-8 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+            <div className="mb-8 flex items-center justify-between">
               <div>
                 <h1 className={`text-2xl font-semibold mb-1 ${isDarkMode ? 'text-white' : 'text-gray-900'}`}>Savdo Tarixi</h1>
                 <p className={`text-sm ${isDarkMode ? 'text-gray-400' : 'text-gray-500'}`}>Barcha filiallar - Oxirgi 30 kun</p>
               </div>
               
-              {/* Tugmalar */}
-              <div className="flex items-center gap-3">
-                {/* Oylik Planni Tarixga Saqlash (Admin uchun) */}
-                {isAuthenticated && userRole === 'admin' && (
-                  <button
-                    onClick={async () => {
-                      if (confirm('Oylik planni hozir tarixga saqlashni xohlaysizmi?\n\nBarcha filiallarning oylik plan ma\'lumotlari saqlanadi va keyingi oy uchun reset qilinadi.')) {
-                        try {
-                          const response = await fetch('/api/monthly-plan/auto-save-now', {
-                            method: 'POST',
-                            headers: { 'Content-Type': 'application/json' }
-                          });
-                          const result = await response.json();
-                          if (result.ok) {
-                            alert('✅ Oylik plan tarixga saqlandi!\n\nEndi "Oylik Plan Tarixi" sahifasida ko\'rishingiz mumkin.');
-                            await loadBranches();
-                          } else {
-                            alert('❌ Xato: ' + result.error);
-                          }
-                        } catch (error) {
-                          alert('❌ Xato yuz berdi: ' + (error as Error).message);
-                        }
-                      }
-                    }}
-                    className="px-4 py-2.5 bg-gradient-to-r from-green-500 to-emerald-600 text-white rounded-xl font-semibold hover:shadow-lg hover:shadow-green-500/30 transition-all flex items-center gap-2 text-sm"
-                    title="Oylik planni tarixga saqlash"
-                  >
-                    <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7H5a2 2 0 00-2 2v9a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-3m-1 4l-3 3m0 0l-3-3m3 3V4" />
-                    </svg>
-                    <span className="hidden sm:inline">Oylik Plan Saqlash</span>
-                    <span className="sm:hidden">Saqlash</span>
-                  </button>
-                )}
-                
-                {/* Oylik Plan Tarixi tugmasi */}
-                <button
-                  onClick={() => {
-                    setActiveView("planHistory");
-                    loadMonthlyPlanHistory();
-                  }}
-                  className="px-4 py-2.5 bg-gradient-to-r from-[#F87819] to-[#ff8c3a] text-white rounded-xl font-semibold hover:shadow-lg hover:shadow-orange-500/30 transition-all flex items-center gap-2 text-sm"
-                >
-                  <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-                  </svg>
-                  <span className="hidden sm:inline">Oylik Plan Tarixi</span>
-                  <span className="sm:hidden">Plan Tarixi</span>
-                </button>
-              </div>
+              {/* Oylik Plan Tarixi tugmasi */}
+              <button
+                onClick={() => {
+                  setActiveView("planHistory");
+                  loadMonthlyPlanHistory();
+                }}
+                className="px-6 py-3 bg-gradient-to-r from-[#F87819] to-[#ff8c3a] text-white rounded-xl font-semibold hover:shadow-lg hover:shadow-orange-500/30 transition-all flex items-center gap-2"
+              >
+                <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                </svg>
+                Oylik Plan Tarixi
+              </button>
             </div>
 
             {history.length === 0 ? (
@@ -3635,10 +3601,15 @@ export default function App() {
                         const cleaned = e.target.value.replace(/[^\d]/g, "");
                         if (cleaned === "") {
                           setDailySalesInput("");
+                          setTeamVolumeBonusInput(""); // O'zi qilgan savdodan bonusni ham tozalaymiz
                           return;
                         }
                         const numValue = parseFloat(cleaned);
                         setDailySalesInput(formatNumber(numValue));
+                        
+                        // O'zi qilgan savdodan 0.5% ni avtomatik hisoblash
+                        const personalSalesBonus = (numValue * 0.5) / 100;
+                        setTeamVolumeBonusInput(formatNumber(Math.round(personalSalesBonus)));
                       }}
                       onKeyPress={(e) => {
                         if (e.key === 'Enter') {
@@ -3767,36 +3738,23 @@ export default function App() {
                     </p>
                   </div>
 
-                  {/* Jamoaviy Abyom Bonusi */}
+                  {/* O'zi Qilgan Savdo */}
                   <div>
                     <label className={`flex items-center gap-2 text-sm font-bold mb-2 ${isDarkMode ? 'text-white' : 'text-gray-900'}`}>
                       <span className="w-2 h-2 rounded-full bg-teal-500"></span>
-                      Jamoaviy Abyom Bonusi
+                      O'zi Qilgan Savdo
                     </label>
                     <input
                       type="text"
                       value={teamVolumeBonusInput}
-                      onChange={(e) => {
-                        const cleaned = e.target.value.replace(/[^\d]/g, "");
-                        if (cleaned === "") {
-                          setTeamVolumeBonusInput("");
-                          return;
-                        }
-                        const numValue = parseFloat(cleaned);
-                        setTeamVolumeBonusInput(formatNumber(numValue));
-                      }}
-                      onKeyPress={(e) => {
-                        if (e.key === 'Enter') {
-                          updateDailySales();
-                        }
-                      }}
-                      className={`w-full px-4 py-3 border-2 border-teal-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-teal-500 focus:border-teal-500 text-lg font-bold ${
-                        isDarkMode ? 'bg-gray-700 text-white placeholder-gray-400' : 'bg-white text-gray-900'
+                      readOnly
+                      className={`w-full px-4 py-3 border-2 border-teal-300 rounded-xl text-lg font-bold cursor-not-allowed ${
+                        isDarkMode ? 'bg-gray-700 text-white' : 'bg-white text-gray-900'
                       }`}
                       placeholder="0"
                     />
                     <p className={`text-xs mt-1 ${isDarkMode ? 'text-gray-400' : 'text-gray-500'}`}>
-                      💡 Jamoa natijasi uchun mukofot
+                      💡 Avtomatik: Chakana savdo × 0.5%
                     </p>
                   </div>
 
@@ -3881,7 +3839,7 @@ export default function App() {
                       <div className="flex justify-between items-center py-1">
                         <span className="flex items-center gap-2">
                           <span className="w-2 h-2 rounded-full bg-teal-500"></span>
-                          Jamoaviy abyom:
+                          O'z savdosi (0.5%):
                         </span>
                         <span className="font-bold text-teal-600">
                           + {formatMoney(parseFloat(teamVolumeBonusInput.replace(/,/g, "")) || 0)}
