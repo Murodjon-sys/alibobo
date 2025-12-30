@@ -895,7 +895,7 @@ app.post('/api/history/save-daily', async (req, res) => {
         salary += (emp.fixedBonus || 0);
         // Shaxsiy bonus qo'shamiz
         salary += (emp.personalBonus || 0);
-        // Jamoaviy abyom bonusi qo'shamiz
+        // O'zi qilgan savdodan
         salary += (emp.teamVolumeBonus || 0);
         // Jami savdodan ulush bonusi qo'shamiz
         salary += (emp.salesShareBonus || 0);
