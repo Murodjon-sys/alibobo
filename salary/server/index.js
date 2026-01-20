@@ -912,7 +912,41 @@ app.post('/api/migrate-sales', async (req, res) => {
   }
 });
 
-const PORT = process.env.PORT || 3001;
-app.listen(PORT, () => {
-  console.log(`Server ${PORT} portda ishlamoqda`);
+// PORT konfiguratsiyasi - faqat .env dan olinadi
+const PORT = process.env.PORT || 3011;
+
+// Server ishga tushishidan oldin portni tekshirish
+if (!PORT || isNaN(PORT)) {
+  console.error('❌ PORT noto\'g\'ri yoki belgilanmagan!');
+  process.exit(1);
+}
+
+// Faqat bitta listen - production ready
+const server = app.listen(PORT, '0.0.0.0', () => {
+  console.log(`✓ Server ${PORT} portda ishlamoqda`);
+  console.log(`✓ Environment: ${process.env.NODE_ENV || 'development'}`);
+  console.log(`✓ Process ID: ${process.pid}`);
+});
+
+// Graceful shutdown
+process.on('SIGTERM', () => {
+  console.log('SIGTERM signal qabul qilindi. Server yopilmoqda...');
+  server.close(() => {
+    console.log('Server yopildi');
+    mongoose.connection.close(false, () => {
+      console.log('MongoDB ulanishi yopildi');
+      process.exit(0);
+    });
+  });
+});
+
+process.on('SIGINT', () => {
+  console.log('SIGINT signal qabul qilindi. Server yopilmoqda...');
+  server.close(() => {
+    console.log('Server yopildi');
+    mongoose.connection.close(false, () => {
+      console.log('MongoDB ulanishi yopildi');
+      process.exit(0);
+    });
+  });
 });
